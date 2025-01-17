@@ -1,41 +1,189 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Pages Test</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f4;
-            text-align: center;
-            padding: 50px;
-        }
-        h1 {
-            color: #333;
-        }
-        #message {
-            margin-top: 20px;
-            color: #555;
-        }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>Copter Dodging Simulator</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden; /* Hide scrollbars */
+      background: #000;
+    }
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: #222;
+      border: 2px solid #fff;
+    }
+  </style>
 </head>
 <body>
-    <h1>Welcome to My GitHub Pages Site!</h1>
-    <p id="message">This is a sample page to test GitHub Pages deployment.</p>
-    <button onclick="changeMessage()">Click Me</button>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
 
-    <script>
-        function changeMessage() {
-            const msg = document.getElementById('message');
-            msg.textContent = "GitHub Pages is working perfectly!";
-            msg.style.color = "#28a745";
+  <script>
+    // Get the canvas and its context
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    // Player (copter) properties
+    const copter = {
+      x: WIDTH / 2,
+      y: HEIGHT / 2,
+      width: 40,
+      height: 40,
+      speed: 5
+    };
+
+    // Bullets array
+    let bullets = [];
+
+    // Time tracking for bullet spawning
+    let lastSpawn = 0;
+    const spawnInterval = 1000; // spawn a bullet every 1 second (ms)
+
+    // To track which keys are pressed
+    const keys = {};
+
+    // Listen to keydown / keyup events
+    window.addEventListener("keydown", (e) => {
+      keys[e.code] = true;
+    });
+    window.addEventListener("keyup", (e) => {
+      keys[e.code] = false;
+    });
+
+    // Spawn a bullet from a random edge toward the copter
+    function spawnBullet() {
+      // Choose one of four edges: top, bottom, left, right
+      const edges = ["top", "bottom", "left", "right"];
+      const edge = edges[Math.floor(Math.random() * edges.length)];
+
+      let x, y;
+      if (edge === "top") {
+        x = Math.random() * WIDTH;
+        y = 0;
+      } else if (edge === "bottom") {
+        x = Math.random() * WIDTH;
+        y = HEIGHT;
+      } else if (edge === "left") {
+        x = 0;
+        y = Math.random() * HEIGHT;
+      } else {
+        x = WIDTH;
+        y = Math.random() * HEIGHT;
+      }
+
+      // Bullet speed
+      const bulletSpeed = 3;
+
+      // Calculate direction vector from bullet spawn to copter
+      const dx = (copter.x + copter.width / 2) - x;
+      const dy = (copter.y + copter.height / 2) - y;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+
+      // Normalize velocity to bulletSpeed
+      const vx = (dx / dist) * bulletSpeed;
+      const vy = (dy / dist) * bulletSpeed;
+
+      // Push bullet into array
+      bullets.push({
+        x: x,
+        y: y,
+        vx: vx,
+        vy: vy,
+        size: 10 // bullet width/height
+      });
+    }
+
+    // Update all game objects
+    function update(deltaTime) {
+      // Move copter based on keys pressed
+      if (keys["ArrowLeft"]) {
+        copter.x -= copter.speed;
+      }
+      if (keys["ArrowRight"]) {
+        copter.x += copter.speed;
+      }
+      if (keys["ArrowUp"]) {
+        copter.y -= copter.speed;
+      }
+      if (keys["ArrowDown"]) {
+        copter.y += copter.speed;
+      }
+
+      // Keep copter within canvas boundaries
+      copter.x = Math.max(0, Math.min(copter.x, WIDTH - copter.width));
+      copter.y = Math.max(0, Math.min(copter.y, HEIGHT - copter.height));
+
+      // Spawn bullets at intervals
+      const now = performance.now();
+      if (now - lastSpawn > spawnInterval) {
+        spawnBullet();
+        lastSpawn = now;
+      }
+
+      // Update bullet positions
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+
+        // Remove bullets if they go off screen
+        if (b.x < -b.size || b.x > WIDTH + b.size ||
+            b.y < -b.size || b.y > HEIGHT + b.size) {
+          bullets.splice(i, 1);
+          continue;
         }
-    </script>
+
+        // Check collision with copter (simple bounding-box collision)
+        if (
+          b.x < copter.x + copter.width &&
+          b.x + b.size > copter.x &&
+          b.y < copter.y + copter.height &&
+          b.y + b.size > copter.y
+        ) {
+          // Collision detected - in a real game, you'd handle damage or end the game.
+          console.log("Collision! Game over!");
+          // For now, remove bullet so we can keep playing
+          bullets.splice(i, 1);
+        }
+      }
+    }
+
+    // Draw everything on canvas
+    function draw() {
+      // Clear the screen
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      // Draw copter (as a green rectangle for demo)
+      ctx.fillStyle = "green";
+      ctx.fillRect(copter.x, copter.y, copter.width, copter.height);
+
+      // Draw bullets (red squares for demo)
+      ctx.fillStyle = "red";
+      for (let b of bullets) {
+        ctx.fillRect(b.x, b.y, b.size, b.size);
+      }
+    }
+
+    // Main game loop (using requestAnimationFrame)
+    let lastTime = 0;
+    function gameLoop(timestamp) {
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+
+      update(deltaTime);
+      draw();
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    // Start the game
+    requestAnimationFrame(gameLoop);
+  </script>
 </body>
 </html>
